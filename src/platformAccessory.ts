@@ -212,7 +212,13 @@ export class CowayPlatformAccessory {
       (label: string, fn: (value: CharacteristicValue) => Promise<void>) =>
       (value: CharacteristicValue) => {
         this.platform.log.debug(label, value);
-        return fn(value);
+        // Respond to HomeKit immediately rather than blocking on the API
+        // round trip — slow write responses cause the home hub to queue and
+        // re-send duplicate writes. Optimistic pushes give instant UI
+        // feedback; the poll reconciles the real state.
+        fn(value).catch((err) => {
+          this.platform.log.error(label, "failed", err);
+        });
       };
 
     const airPurifierService =
