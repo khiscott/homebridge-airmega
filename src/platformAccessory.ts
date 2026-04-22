@@ -436,10 +436,15 @@ export class CowayPlatformAccessory {
       case "":
         this.platform.log.debug(`no air quality, falling back to pm`);
         break;
-      default:
+      default: {
+        const numericPm25 = parseInt(airQuality, 10);
+        if (!isNaN(numericPm25)) {
+          return this.pm25ToAirQuality(numericPm25);
+        }
         this.platform.log.warn(
           `unknown air quality "${airQuality}", falling back to pm`,
         );
+      }
     }
 
     // fall back to pm2.5, pm10, or pm1
@@ -469,6 +474,22 @@ export class CowayPlatformAccessory {
       return this.platform.Characteristic.AirQuality.EXCELLENT;
     }
     throw new Error(`unknown dustpm: ${dustpm25} / ${dustpm10} / ${dustpm1}`);
+  };
+
+  private pm25ToAirQuality = (pm25: number) => {
+    if (pm25 >= 151) {
+      return this.platform.Characteristic.AirQuality.POOR;
+    }
+    if (pm25 >= 56) {
+      return this.platform.Characteristic.AirQuality.INFERIOR;
+    }
+    if (pm25 >= 36) {
+      return this.platform.Characteristic.AirQuality.FAIR;
+    }
+    if (pm25 >= 12) {
+      return this.platform.Characteristic.AirQuality.GOOD;
+    }
+    return this.platform.Characteristic.AirQuality.EXCELLENT;
   };
 
   private pushHomeKitUpdates = () => {
