@@ -311,10 +311,7 @@ export class CowayPlatformAccessory {
       );
 
     const sleepSwitchService =
-      this.accessory.getServiceById(
-        this.platform.Service.Switch,
-        "sleep",
-      ) ||
+      this.accessory.getServiceById(this.platform.Service.Switch, "sleep") ||
       this.accessory.addService(
         this.platform.Service.Switch,
         "Sleep Mode",
@@ -513,22 +510,15 @@ export class CowayPlatformAccessory {
       pmValue = parseInt(dustpm1, 10);
     }
 
-    if (pmValue >= 151) {
-      return this.platform.Characteristic.AirQuality.POOR;
-    }
-    if (pmValue >= 56) {
-      return this.platform.Characteristic.AirQuality.INFERIOR;
-    }
-    if (pmValue >= 36) {
-      return this.platform.Characteristic.AirQuality.FAIR;
-    }
-    if (pmValue >= 12) {
-      return this.platform.Characteristic.AirQuality.GOOD;
-    }
     if (pmValue >= 0) {
-      return this.platform.Characteristic.AirQuality.EXCELLENT;
+      return this.pm25ToAirQuality(pmValue);
     }
-    throw new Error(`unknown dustpm: ${dustpm25} / ${dustpm10} / ${dustpm1}`);
+    // no air quality data at all (sensor warm-up, models without dust
+    // reporting) — must not throw, this runs inside pushHomeKitUpdates
+    this.platform.log.debug(
+      `no dustpm data (${dustpm25} / ${dustpm10} / ${dustpm1})`,
+    );
+    return this.platform.Characteristic.AirQuality.UNKNOWN;
   };
 
   private pm25ToAirQuality = (pm25: number) => {
@@ -548,22 +538,34 @@ export class CowayPlatformAccessory {
   };
 
   private pushHomeKitUpdates = () => {
+    const currentState = this.getCurrentAirPurifierState();
+    const targetState = this.getTargetAirPurifierState();
+    const active = this.getActive();
+    const rotationSpeed = this.getRotationSpeed();
+    const lightOn = this.getLightOn();
+    const sleepMode = this.getSleepMode();
+    const airQuality = this.getAirQuality();
+
+    this.platform.log.debug(
+      `[${this.accessory.context.device.dvcNick}] pushing: active=${active} current=${currentState} target=${targetState} speed=${rotationSpeed} light=${lightOn} sleep=${sleepMode} aq=${airQuality}`,
+    );
+
     const airPurifierService = this.accessory.getService(
       this.platform.Service.AirPurifier,
     );
     if (airPurifierService) {
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.CurrentAirPurifierState)
-        .updateValue(this.getCurrentAirPurifierState());
+        .updateValue(currentState);
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.TargetAirPurifierState)
-        .updateValue(this.getTargetAirPurifierState());
+        .updateValue(targetState);
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.Active)
-        .updateValue(this.getActive());
+        .updateValue(active);
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.RotationSpeed)
-        .updateValue(this.getRotationSpeed());
+        .updateValue(rotationSpeed);
     }
 
     const lightService = this.accessory.getService(
@@ -572,7 +574,7 @@ export class CowayPlatformAccessory {
     if (lightService) {
       lightService
         .getCharacteristic(this.platform.Characteristic.On)
-        .updateValue(this.getLightOn());
+        .updateValue(lightOn);
     }
 
     const sleepSwitchService = this.accessory.getServiceById(
@@ -582,7 +584,7 @@ export class CowayPlatformAccessory {
     if (sleepSwitchService) {
       sleepSwitchService
         .getCharacteristic(this.platform.Characteristic.On)
-        .updateValue(this.getSleepMode());
+        .updateValue(sleepMode);
     }
 
     const indoorAirQualityService = this.accessory.getServiceById(
@@ -592,7 +594,7 @@ export class CowayPlatformAccessory {
     if (indoorAirQualityService) {
       indoorAirQualityService
         .getCharacteristic(this.platform.Characteristic.AirQuality)
-        .updateValue(this.getAirQuality());
+        .updateValue(airQuality);
       if (this.guardedOnlineData().IAQ.dustpm25 !== "") {
         indoorAirQualityService
           .getCharacteristic(this.platform.Characteristic.PM2_5Density)
@@ -802,7 +804,11 @@ export class CowayPlatformAccessory {
     const { data } = (await (
       await this.platform.fetch(url)
     ).json()) as Response<DeviceData>;
-    this.platform.log.debug("updated status");
+    const { power, prodMode, airVolume, light } = data.prodStatus;
+    const { inairquality, dustpm25, dustpm10, dustpm1 } = data.IAQ;
+    this.platform.log.debug(
+      `[${this.accessory.context.device.dvcNick}] status: power=${power} mode=${prodMode} airVolume=${airVolume} light=${light} iaq=${inairquality} pm25=${dustpm25} pm10=${dustpm10} pm1=${dustpm1}`,
+    );
     this.data = data;
     this.pushHomeKitUpdates();
   }
