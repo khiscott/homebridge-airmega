@@ -409,7 +409,7 @@ export class CowayPlatformAccessory {
   };
   private getCurrentAirPurifierState = () => {
     const prodStatus = this.guardedOnlineData().prodStatus;
-    if (prodStatus.prodMode === Mode.Off) {
+    if (prodStatus.power === Power.Off || prodStatus.prodMode === Mode.Off) {
       return this.platform.Characteristic.CurrentAirPurifierState.INACTIVE;
     }
     if (prodStatus.airVolume === AirVolume.Off) {
@@ -647,7 +647,6 @@ export class CowayPlatformAccessory {
         body,
       },
     );
-    await this.updateStatus();
   }
 
   private coalesceCommands(
