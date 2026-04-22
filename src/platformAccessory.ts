@@ -810,8 +810,9 @@ export class CowayPlatformAccessory {
       await this.platform.fetch(url)
     ).json()) as Response<DeviceData>;
     const { power, prodMode, airVolume, light } = data.prodStatus;
+    const { inairquality, dustpm25, dustpm10, dustpm1 } = data.IAQ;
     this.platform.log.debug(
-      `updated status: power=${power} mode=${prodMode} airVolume=${airVolume} light=${light}`,
+      `updated status: power=${power} mode=${prodMode} airVolume=${airVolume} light=${light} iaq=${inairquality} pm25=${dustpm25} pm10=${dustpm10} pm1=${dustpm1}`,
     );
     this.data = data;
     this.pushHomeKitUpdates();
