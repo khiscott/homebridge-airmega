@@ -443,7 +443,8 @@ export class CowayPlatformAccessory {
       : this.platform.Characteristic.Active.INACTIVE;
   };
   private getLightOn = () => {
-    return this.guardedOnlineData().prodStatus.light !== Light.Off;
+    const { power, light } = this.guardedOnlineData().prodStatus;
+    return power === Power.On && light !== Light.Off;
   };
 
   private getAirQuality = () => {
