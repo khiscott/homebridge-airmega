@@ -548,22 +548,33 @@ export class CowayPlatformAccessory {
   };
 
   private pushHomeKitUpdates = () => {
+    const currentState = this.getCurrentAirPurifierState();
+    const targetState = this.getTargetAirPurifierState();
+    const active = this.getActive();
+    const rotationSpeed = this.getRotationSpeed();
+    const lightOn = this.getLightOn();
+    const sleepMode = this.getSleepMode();
+
+    this.platform.log.debug(
+      `pushing: active=${active} current=${currentState} target=${targetState} speed=${rotationSpeed} light=${lightOn} sleep=${sleepMode}`,
+    );
+
     const airPurifierService = this.accessory.getService(
       this.platform.Service.AirPurifier,
     );
     if (airPurifierService) {
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.CurrentAirPurifierState)
-        .updateValue(this.getCurrentAirPurifierState());
+        .updateValue(currentState);
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.TargetAirPurifierState)
-        .updateValue(this.getTargetAirPurifierState());
+        .updateValue(targetState);
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.Active)
-        .updateValue(this.getActive());
+        .updateValue(active);
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.RotationSpeed)
-        .updateValue(this.getRotationSpeed());
+        .updateValue(rotationSpeed);
     }
 
     const lightService = this.accessory.getService(
@@ -572,7 +583,7 @@ export class CowayPlatformAccessory {
     if (lightService) {
       lightService
         .getCharacteristic(this.platform.Characteristic.On)
-        .updateValue(this.getLightOn());
+        .updateValue(lightOn);
     }
 
     const sleepSwitchService = this.accessory.getServiceById(
@@ -582,7 +593,7 @@ export class CowayPlatformAccessory {
     if (sleepSwitchService) {
       sleepSwitchService
         .getCharacteristic(this.platform.Characteristic.On)
-        .updateValue(this.getSleepMode());
+        .updateValue(sleepMode);
     }
 
     const indoorAirQualityService = this.accessory.getServiceById(
@@ -798,7 +809,10 @@ export class CowayPlatformAccessory {
     const { data } = (await (
       await this.platform.fetch(url)
     ).json()) as Response<DeviceData>;
-    this.platform.log.debug("updated status");
+    const { power, prodMode, airVolume, light } = data.prodStatus;
+    this.platform.log.debug(
+      `updated status: power=${power} mode=${prodMode} airVolume=${airVolume} light=${light}`,
+    );
     this.data = data;
     this.pushHomeKitUpdates();
   }
