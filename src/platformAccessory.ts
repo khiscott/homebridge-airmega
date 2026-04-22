@@ -2,7 +2,7 @@ import { CharacteristicValue, PlatformAccessory } from "homebridge";
 
 import { CowayHomebridgePlatform as CowayHomebridgePlatform } from "./platform";
 
-export const COMMAND_COALESCE_WINDOW_MS = 500;
+export const COMMAND_COALESCE_WINDOW_MS = 1500;
 
 export interface AccessoryContext {
   device: {
