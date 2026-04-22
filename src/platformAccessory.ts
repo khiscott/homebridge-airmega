@@ -310,6 +310,33 @@ export class CowayPlatformAccessory {
         ),
       );
 
+    const sleepSwitchService =
+      this.accessory.getServiceById(
+        this.platform.Service.Switch,
+        "sleep",
+      ) ||
+      this.accessory.addService(
+        this.platform.Service.Switch,
+        "Sleep Mode",
+        "sleep",
+      );
+    sleepSwitchService
+      .getCharacteristic(this.platform.Characteristic.Name)
+      .setValue("Sleep Mode");
+    sleepSwitchService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .onGet(this.getSleepMode)
+      .onSet(
+        logSet("setting sleep mode", async (value) => {
+          await this.controlDevice([
+            {
+              funcId: FunctionId.Mode,
+              cmdVal: value ? Mode.Sleep : Mode.Smart,
+            },
+          ]);
+        }),
+      );
+
     const indoorAirQualityService =
       this.accessory.getServiceById(
         this.platform.Service.AirQualitySensor,
@@ -446,6 +473,9 @@ export class CowayPlatformAccessory {
     const { power, light } = this.guardedOnlineData().prodStatus;
     return power === Power.On && light !== Light.Off;
   };
+  private getSleepMode = () => {
+    return this.guardedOnlineData().prodStatus.prodMode === Mode.Sleep;
+  };
 
   private getAirQuality = () => {
     const airQuality = this.guardedOnlineData().IAQ.inairquality;
@@ -543,6 +573,16 @@ export class CowayPlatformAccessory {
       lightService
         .getCharacteristic(this.platform.Characteristic.On)
         .updateValue(this.getLightOn());
+    }
+
+    const sleepSwitchService = this.accessory.getServiceById(
+      this.platform.Service.Switch,
+      "sleep",
+    );
+    if (sleepSwitchService) {
+      sleepSwitchService
+        .getCharacteristic(this.platform.Characteristic.On)
+        .updateValue(this.getSleepMode());
     }
 
     const indoorAirQualityService = this.accessory.getServiceById(
