@@ -657,11 +657,18 @@ export class CowayPlatformAccessory {
 
   private async sendCommands(commands: Array<FunctionI<FunctionId>>) {
     if (!commands.some((c) => c.funcId === FunctionId.Light)) {
-      const comDV = await this.comDevice();
-      commands.push({
-        funcId: FunctionId.Light,
-        cmdVal: comDV.data.controlStatus[FunctionId.Light],
-      });
+      if (this.platform.config.lightOffOnPurifierOn) {
+        commands.push({
+          funcId: FunctionId.Light,
+          cmdVal: Light.Off,
+        });
+      } else {
+        const comDV = await this.comDevice();
+        commands.push({
+          funcId: FunctionId.Light,
+          cmdVal: comDV.data.controlStatus[FunctionId.Light],
+        });
+      }
     }
     const body = JSON.stringify({
       devId: this.accessory.context.device.barcode,

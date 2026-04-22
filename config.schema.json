@@ -13,6 +13,12 @@
         "title": "Password",
         "type": "string",
         "required": true
+      },
+      "lightOffOnPurifierOn": {
+        "title": "Keep light off when purifier turns on",
+        "type": "boolean",
+        "default": false,
+        "description": "By default, the purifier turns the light on when powered on. Enable this to keep the light off."
       }
     }
   }
