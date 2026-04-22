@@ -290,6 +290,26 @@ export class CowayPlatformAccessory {
         }),
       );
 
+    const lightService =
+      this.accessory.getService(this.platform.Service.Lightbulb) ||
+      this.accessory.addService(this.platform.Service.Lightbulb);
+    lightService
+      .getCharacteristic(this.platform.Characteristic.Name)
+      .setValue("Light");
+    lightService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .onGet(this.getLightOn)
+      .onSet(
+        logSet("setting light", async (value) =>
+          this.controlDevice([
+            {
+              funcId: FunctionId.Light,
+              cmdVal: value ? Light.On : Light.Off,
+            },
+          ]),
+        ),
+      );
+
     const indoorAirQualityService =
       this.accessory.getServiceById(
         this.platform.Service.AirQualitySensor,
@@ -422,6 +442,10 @@ export class CowayPlatformAccessory {
       ? this.platform.Characteristic.Active.ACTIVE
       : this.platform.Characteristic.Active.INACTIVE;
   };
+  private getLightOn = () => {
+    return this.guardedOnlineData().prodStatus.light !== Light.Off;
+  };
+
   private getAirQuality = () => {
     const airQuality = this.guardedOnlineData().IAQ.inairquality;
     switch (airQuality) {
@@ -509,6 +533,15 @@ export class CowayPlatformAccessory {
       airPurifierService
         .getCharacteristic(this.platform.Characteristic.RotationSpeed)
         .updateValue(this.getRotationSpeed());
+    }
+
+    const lightService = this.accessory.getService(
+      this.platform.Service.Lightbulb,
+    );
+    if (lightService) {
+      lightService
+        .getCharacteristic(this.platform.Characteristic.On)
+        .updateValue(this.getLightOn());
     }
 
     const indoorAirQualityService = this.accessory.getServiceById(
@@ -623,7 +656,7 @@ export class CowayPlatformAccessory {
   }
 
   private async sendCommands(commands: Array<FunctionI<FunctionId>>) {
-    if (!commands[FunctionId.Light]) {
+    if (!commands.some((c) => c.funcId === FunctionId.Light)) {
       const comDV = await this.comDevice();
       commands.push({
         funcId: FunctionId.Light,
