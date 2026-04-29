@@ -184,6 +184,7 @@ export class CowayPlatformAccessory {
   private pendingSendPromise: Promise<void> | null = null;
   private pendingSendResolve: (() => void) | null = null;
   private pendingSendReject: ((reason?: unknown) => void) | null = null;
+  private lastCommandTime = 0;
 
   constructor(
     private readonly platform: CowayHomebridgePlatform,
@@ -546,7 +547,17 @@ export class CowayPlatformAccessory {
     return this.platform.Characteristic.AirQuality.EXCELLENT;
   };
 
+  private static readonly PUSH_COOLDOWN_MS = 15_000;
+
   private pushHomeKitUpdates = () => {
+    const elapsed = Date.now() - this.lastCommandTime;
+    if (elapsed < CowayPlatformAccessory.PUSH_COOLDOWN_MS) {
+      this.platform.log.debug(
+        `[${this.accessory.context.device.dvcNick}] skipping push, command sent ${elapsed}ms ago`,
+      );
+      return;
+    }
+
     const currentState = this.getCurrentAirPurifierState();
     const targetState = this.getTargetAirPurifierState();
     const active = this.getActive();
@@ -664,6 +675,7 @@ export class CowayPlatformAccessory {
   }
 
   private async controlDevice(commands: Array<FunctionI<FunctionId>>) {
+    this.lastCommandTime = Date.now();
     this.pendingCommands = this.coalesceCommands(
       this.pendingCommands,
       commands,
