@@ -801,6 +801,15 @@ export class CowayPlatformAccessory {
     url.searchParams.append("membershipYn", "N");
     // url.searchParams.append('selfYn', 'N');
 
+    const comDV = await this.comDevice();
+    if (!comDV.data.netStatus) {
+      this.platform.log.debug(
+        `[${this.accessory.context.device.dvcNick}] device offline`,
+      );
+      this.data = null;
+      return;
+    }
+
     const { data } = (await (
       await this.platform.fetch(url)
     ).json()) as Response<DeviceData>;
