@@ -278,17 +278,13 @@ export class CowayPlatformAccessory {
           } else {
             airVolume = AirVolume.Off;
           }
+          // manual-mode side effect is pushed optimistically in pushOptimisticUpdates
           await this.controlDevice([
             {
               funcId: FunctionId.AirVolume,
               cmdVal: airVolume,
             },
           ]);
-          // setting fan manually sets to manual mode
-          airPurifierService.updateCharacteristic(
-            this.platform.Characteristic.TargetAirPurifierState,
-            this.platform.Characteristic.TargetAirPurifierState.MANUAL,
-          );
         }),
       );
 
@@ -681,6 +677,14 @@ export class CowayPlatformAccessory {
       commands,
     );
 
+    // push optimistic state at write time, not after the API round trip —
+    // the Home app re-sends writes while read-backs still return the old
+    // value, so the characteristics must reflect the new state immediately.
+    // push the coalesced set, not the incoming commands: coalescing can drop
+    // commands (auto-mode strips fan speed, off discards everything else),
+    // and HomeKit must not show state that will never be sent
+    this.pushOptimisticUpdates(this.pendingCommands);
+
     // clear old pending send, so those commands "finish" in the home UI
     this.pendingSendResolve?.();
     // cancel old command sending, those commands will be merged in this send
@@ -721,21 +725,27 @@ export class CowayPlatformAccessory {
 
   private async sendCommands(commands: Array<FunctionI<FunctionId>>) {
     if (!commands.some((c) => c.funcId === FunctionId.Light)) {
+      let appendedLight: FunctionI<FunctionId.Light> | undefined;
       if (this.platform.config.lightOffOnPurifierOn) {
         // the device chimes per function, so skip the light command when the
         // light is already off
         if (this.data?.prodStatus.light !== Light.Off) {
-          commands.push({
+          appendedLight = {
             funcId: FunctionId.Light,
             cmdVal: Light.Off,
-          });
+          };
         }
       } else {
         const comDV = await this.comDevice();
-        commands.push({
+        appendedLight = {
           funcId: FunctionId.Light,
           cmdVal: comDV.data.controlStatus[FunctionId.Light],
-        });
+        };
+      }
+      if (appendedLight) {
+        commands.push(appendedLight);
+        // the appended command changes device state too — reflect it
+        this.pushOptimisticUpdates([appendedLight]);
       }
     }
     const body = JSON.stringify({
@@ -755,6 +765,154 @@ export class CowayPlatformAccessory {
         body,
       },
     );
+  }
+
+  private pushOptimisticUpdates(commands: Array<FunctionI<FunctionId>>) {
+    for (const command of commands) {
+      switch (command.funcId) {
+        case FunctionId.Light: {
+          const lightService = this.accessory.getService(
+            this.platform.Service.Lightbulb,
+          );
+          if (lightService) {
+            const lightOn = command.cmdVal !== Light.Off;
+            this.platform.log.debug(
+              `[${this.accessory.context.device.dvcNick}] optimistic push: light=${lightOn}`,
+            );
+            lightService
+              .getCharacteristic(this.platform.Characteristic.On)
+              .updateValue(lightOn);
+          }
+          break;
+        }
+        case FunctionId.Mode: {
+          const mode = command.cmdVal as Mode;
+          const sleepOn = mode === Mode.Sleep;
+          this.platform.log.debug(
+            `[${this.accessory.context.device.dvcNick}] optimistic push: mode=${mode} sleep=${sleepOn}`,
+          );
+          const sleepService = this.accessory.getServiceById(
+            this.platform.Service.Switch,
+            "sleep",
+          );
+          if (sleepService) {
+            sleepService
+              .getCharacteristic(this.platform.Characteristic.On)
+              .updateValue(sleepOn);
+          }
+          const purifierService = this.accessory.getService(
+            this.platform.Service.AirPurifier,
+          );
+          if (purifierService) {
+            if (isAutoMode(mode) || mode === Mode.Manual) {
+              purifierService
+                .getCharacteristic(
+                  this.platform.Characteristic.TargetAirPurifierState,
+                )
+                .updateValue(
+                  isAutoMode(mode)
+                    ? this.platform.Characteristic.TargetAirPurifierState.AUTO
+                    : this.platform.Characteristic.TargetAirPurifierState
+                        .MANUAL,
+                );
+            }
+            if (sleepOn) {
+              // sleep runs the fan low; matches getRotationSpeed's sleep value
+              purifierService
+                .getCharacteristic(this.platform.Characteristic.RotationSpeed)
+                .updateValue(33);
+            }
+          }
+          break;
+        }
+        case FunctionId.Power: {
+          const powerOn = command.cmdVal === Power.On;
+          this.platform.log.debug(
+            `[${
+              this.accessory.context.device.dvcNick
+            }] optimistic push: active=${powerOn ? 1 : 0}`,
+          );
+          const purifierService = this.accessory.getService(
+            this.platform.Service.AirPurifier,
+          );
+          if (purifierService) {
+            purifierService
+              .getCharacteristic(this.platform.Characteristic.Active)
+              .updateValue(
+                powerOn
+                  ? this.platform.Characteristic.Active.ACTIVE
+                  : this.platform.Characteristic.Active.INACTIVE,
+              );
+            // keep the derived current state in sync so the Home app doesn't
+            // show a "Turning off..." spinner until the cooldown ends
+            purifierService
+              .getCharacteristic(
+                this.platform.Characteristic.CurrentAirPurifierState,
+              )
+              .updateValue(
+                powerOn
+                  ? this.platform.Characteristic.CurrentAirPurifierState
+                      .PURIFYING_AIR
+                  : this.platform.Characteristic.CurrentAirPurifierState
+                      .INACTIVE,
+              );
+          }
+          if (!powerOn) {
+            // getLightOn reports the light off whenever power is off
+            const lightService = this.accessory.getService(
+              this.platform.Service.Lightbulb,
+            );
+            if (lightService) {
+              lightService
+                .getCharacteristic(this.platform.Characteristic.On)
+                .updateValue(false);
+            }
+          }
+          break;
+        }
+        case FunctionId.AirVolume: {
+          // setting a fan speed puts the device in manual mode
+          const purifierService = this.accessory.getService(
+            this.platform.Service.AirPurifier,
+          );
+          const sleepService = this.accessory.getServiceById(
+            this.platform.Service.Switch,
+            "sleep",
+          );
+          const speedByVolume: Partial<Record<AirVolume, number>> = {
+            [AirVolume.Off]: 0,
+            [AirVolume.One]: 33,
+            [AirVolume.Two]: 67,
+            [AirVolume.Three]: 100,
+            [AirVolume.Rapid]: 100,
+          };
+          const speed = speedByVolume[command.cmdVal as AirVolume];
+          this.platform.log.debug(
+            `[${this.accessory.context.device.dvcNick}] optimistic push: airVolume=${command.cmdVal} speed=${speed} target=manual sleep=false`,
+          );
+          if (purifierService) {
+            purifierService
+              .getCharacteristic(
+                this.platform.Characteristic.TargetAirPurifierState,
+              )
+              .updateValue(
+                this.platform.Characteristic.TargetAirPurifierState.MANUAL,
+              );
+            if (speed !== undefined) {
+              purifierService
+                .getCharacteristic(this.platform.Characteristic.RotationSpeed)
+                .updateValue(speed);
+            }
+          }
+          if (sleepService) {
+            sleepService
+              .getCharacteristic(this.platform.Characteristic.On)
+              .updateValue(false);
+          }
+          break;
+        }
+      }
+    }
   }
 
   private coalesceCommands(
