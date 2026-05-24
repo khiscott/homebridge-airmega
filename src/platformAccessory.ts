@@ -292,7 +292,7 @@ export class CowayPlatformAccessory {
 
     const lightService =
       this.accessory.getService(this.platform.Service.Lightbulb) ||
-      this.accessory.addService(this.platform.Service.Lightbulb);
+      this.accessory.addService(this.platform.Service.Lightbulb, "Light");
     lightService
       .getCharacteristic(this.platform.Characteristic.Name)
       .setValue("Light");
@@ -314,12 +314,12 @@ export class CowayPlatformAccessory {
       this.accessory.getServiceById(this.platform.Service.Switch, "sleep") ||
       this.accessory.addService(
         this.platform.Service.Switch,
-        "Sleep Mode",
+        "Bedtime",
         "sleep",
       );
     sleepSwitchService
       .getCharacteristic(this.platform.Characteristic.Name)
-      .setValue("Sleep Mode");
+      .setValue("Bedtime");
     sleepSwitchService
       .getCharacteristic(this.platform.Characteristic.On)
       .onGet(this.getSleepMode)
