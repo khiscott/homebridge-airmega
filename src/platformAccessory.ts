@@ -264,12 +264,13 @@ export class CowayPlatformAccessory {
           if (typeof value !== "number") {
             throw new Error(`unexpected value ${value}`);
           }
+          // AirVolume.Rapid ("5") is report-only: sending it as a command is
+          // silently ignored by the device (observed twice on the 400S), so
+          // the slider maps to the three real fan speeds.
           let airVolume: AirVolume;
-          if (value > 80) {
-            airVolume = AirVolume.Rapid;
-          } else if (value > 50) {
+          if (value > 67) {
             airVolume = AirVolume.Three;
-          } else if (value > 25) {
+          } else if (value > 33) {
             airVolume = AirVolume.Two;
           } else if (value > 0) {
             airVolume = AirVolume.One;
@@ -423,11 +424,10 @@ export class CowayPlatformAccessory {
     const airVolume = this.guardedOnlineData().prodStatus.airVolume;
     switch (airVolume) {
       case AirVolume.One:
-        return 25;
+        return 33;
       case AirVolume.Two:
-        return 50;
+        return 67;
       case AirVolume.Three:
-        return 75;
       case AirVolume.Rapid:
         return 100;
       case AirVolume.Nine: // I have no idea what this actually means, setting it doesn't do anything, but it shows up from time to time. Putting it here to silence errors in the logs.
