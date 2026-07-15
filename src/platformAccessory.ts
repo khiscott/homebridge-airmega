@@ -421,7 +421,12 @@ export class CowayPlatformAccessory {
     return parseInt(this.guardedOnlineData().IAQ.dustpm25, 10);
   };
   private getRotationSpeed = () => {
-    const airVolume = this.guardedOnlineData().prodStatus.airVolume;
+    const { airVolume, prodMode } = this.guardedOnlineData().prodStatus;
+    if (prodMode === Mode.Sleep) {
+      // in sleep mode the API reports airVolume "0" and hides the real fan
+      // speed; report the lowest speed so Home doesn't show the fan as off
+      return 33;
+    }
     switch (airVolume) {
       case AirVolume.One:
         return 33;
@@ -456,7 +461,11 @@ export class CowayPlatformAccessory {
     if (prodStatus.power === Power.Off || prodStatus.prodMode === Mode.Off) {
       return this.platform.Characteristic.CurrentAirPurifierState.INACTIVE;
     }
-    if (prodStatus.airVolume === AirVolume.Off) {
+    if (
+      prodStatus.airVolume === AirVolume.Off &&
+      // sleep mode reports airVolume "0" but the fan is running quietly
+      prodStatus.prodMode !== Mode.Sleep
+    ) {
       return this.platform.Characteristic.CurrentAirPurifierState.IDLE;
     }
     return this.platform.Characteristic.CurrentAirPurifierState.PURIFYING_AIR;
