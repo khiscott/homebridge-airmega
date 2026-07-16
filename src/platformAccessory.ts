@@ -659,10 +659,14 @@ export class CowayPlatformAccessory {
   private async sendCommands(commands: Array<FunctionI<FunctionId>>) {
     if (!commands.some((c) => c.funcId === FunctionId.Light)) {
       if (this.platform.config.lightOffOnPurifierOn) {
-        commands.push({
-          funcId: FunctionId.Light,
-          cmdVal: Light.Off,
-        });
+        // the device chimes per function, so skip the light command when the
+        // light is already off
+        if (this.data?.prodStatus.light !== Light.Off) {
+          commands.push({
+            funcId: FunctionId.Light,
+            cmdVal: Light.Off,
+          });
+        }
       } else {
         const comDV = await this.comDevice();
         commands.push({
