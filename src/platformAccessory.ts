@@ -503,7 +503,7 @@ export class CowayPlatformAccessory {
           .getCharacteristic(this.platform.Characteristic.PM2_5Density)
           .updateValue(this.getPm25Density());
       }
-      if (this.guardedOnlineData().IAQ.dustpm10 === "") {
+      if (this.guardedOnlineData().IAQ.dustpm10 !== "") {
         indoorAirQualityService
           .getCharacteristic(this.platform.Characteristic.PM10Density)
           .updateValue(this.getPm10Density());
